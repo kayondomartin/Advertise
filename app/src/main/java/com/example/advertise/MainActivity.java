@@ -51,6 +51,9 @@ public class MainActivity extends AppCompatActivity {
     Runnable runnable;
     private static List<byte[]> dataByteList = null;
     private static int sentDataByteIndex = 0;
+    private static final Integer isScannedGuestsFlagInteger = Integer.parseInt("aa",16);
+    private static final Integer isDataReceivedFlagInteger = Integer.parseInt("ab",16);
+    private static final Integer isFlagPacketInteger = Integer.parseInt("ff",16);
 
     private static final ParcelUuid EDDYSTONE_SERVICE_UUID = ParcelUuid.fromString("0000FEAA-0000-1000-8000-00805F9B34FB");
     private static final String DeviceAddress = "E1:6E:58:BC:F1:81";
@@ -153,7 +156,8 @@ public class MainActivity extends AppCompatActivity {
 
     private static int packetNo = -1;
     private static boolean isKeyReceived  = false;
-    private static boolean isListening = false;
+    private static boolean isDataNeededFlag = false;
+    private static boolean isDataReceivedFlag = false;
     private ScanCallback scanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
@@ -172,9 +176,16 @@ public class MainActivity extends AppCompatActivity {
                     isKeyReceived = true;
                 }
             }else{
+                if((dataByteArray.length == 6) && ((int)dataByteArray[2] == 1) && (dataByteArray[4] == isFlagPacketInteger.byteValue())){
+                    if(dataByteArray[5] == isDataReceivedFlagInteger.byteValue()){
+                        isDataReceivedFlag = true;
+                    }else if(dataByteArray[5] == isScannedGuestsFlagInteger.byteValue()){
+                        isDataNeededFlag = true;
+                    }
+                }
             }
             Log.e(MainActivity.class.getSimpleName(),"Scan Address: "+result.getDevice().getAddress());
-            Log.e(MainActivity.class.getSimpleName(),Arrays.toString(result.getScanRecord().getServiceData(EDDYSTONE_SERVICE_UUID)));
+            Log.e(MainActivity.class.getSimpleName(),getHexData(dataByteArray));
         }
 
 
@@ -189,7 +200,18 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private byte[] buildData(@NonNull byte[]...byteList){
+        return byteList[0];
+    }
 
+    private String getHexData(byte[] bytes){
+        StringBuilder sb = new StringBuilder();
+        int i;
+        int length = bytes.length;
+        for(i=0;i<length;i++){
+            sb.append(String.format("%02X ",bytes[i]));
+        }
+
+        return sb.toString();
     }
 
     private byte[] buildPacketHeader(boolean isKeyReceivedCheck, int fragNo, int fragID){

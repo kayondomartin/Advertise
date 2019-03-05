@@ -371,9 +371,13 @@ public class MainActivity extends AppCompatActivity {
             byte[] built = buildData(header,data);
             dataByteList.add(built);
         }else if(isKeyReceived && isDataNeededFlag){
-
+            byte [] keyBytes = buildKey();
         }
 
+    }
+
+    private byte[] buildKey(){
+        return null;
     }
 
 }

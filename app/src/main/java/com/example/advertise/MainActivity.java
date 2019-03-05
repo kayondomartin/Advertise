@@ -105,14 +105,14 @@ public class MainActivity extends AppCompatActivity {
             if(!isKeyReceived){
                 AdvertiseData data = (new AdvertiseData.Builder())
                         .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        .addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(convertMAC(DeviceAddress),isKeyReceived).get(0))
+                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(convertMAC(DeviceAddress),isKeyReceived).get(0))
                         .build();
                 advertisingSet.setAdvertisingData(data);
             }else{
                 if(sentDataByteIndex == dataByteList.size()) sentDataByteIndex = 0;
                 AdvertiseData data = (new AdvertiseData.Builder())
                         .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        .addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(dataByteList.get(sentDataByteIndex++),isKeyReceived).get(0))
+                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(dataByteList.get(sentDataByteIndex++),isKeyReceived).get(0))
                         .build();
                 advertisingSet.setAdvertisingData(data);
             }
@@ -131,14 +131,14 @@ public class MainActivity extends AppCompatActivity {
             if(!isKeyReceived){
                 data = (new AdvertiseData.Builder())
                         .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        .addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(convertMAC(DeviceAddress),isKeyReceived).get(0))
+                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(convertMAC(DeviceAddress),isKeyReceived).get(0))
                         .build();
                 advertisingSet.setAdvertisingData(data);
             }else{
                 if(sentDataByteIndex == dataByteList.size()) sentDataByteIndex = 0;
                  data = (new AdvertiseData.Builder())
                         .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        .addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(dataByteList.get(sentDataByteIndex++),isKeyReceived).get(0))
+                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(dataByteList.get(sentDataByteIndex++),isKeyReceived).get(0))
                         .build();
                 advertisingSet.setAdvertisingData(data);
             }
@@ -193,14 +193,32 @@ public class MainActivity extends AppCompatActivity {
 
     private void startScan(){
         bleScanner.startScan(SCAN_FILTERS,SCAN_SETTINGS,scanCallback);
+        isScanning = true;
     }
 
     private void stopScan(){
         bleScanner.stopScan(scanCallback);
+        isScanning = false;
     }
 
     private byte[] buildData(@NonNull byte[]...byteList){
-        return byteList[0];
+        int setLength = byteList.length;
+        int i;
+        int [] setLengths = new int[setLength];
+        int totalLength = 0;
+        for(i=0;i<setLength;i++){
+            int itemLength = byteList[i].length;
+            totalLength+= itemLength;
+            setLengths[i] = itemLength;
+        }
+
+        byte[] toReturn = new byte[totalLength];
+        int destPos = 0;
+        for(i=0;i<setLength;i++){
+            System.arraycopy(byteList[i],0,toReturn,destPos,destPos=setLengths[i]);
+        }
+
+        return toReturn;
     }
 
     private String getHexData(byte[] bytes){
@@ -233,11 +251,6 @@ public class MainActivity extends AppCompatActivity {
         return dataHead;
     }
     private void startAdvertising(){
-
-        byte[] dataBytes = buildKey(isKeyReceived);
-        dataByteList = buildDataBytes(dataBytes,isKeyReceived);
-        Log.e(MainActivity.class.getSimpleName(),"DataBytes: "+Arrays.toString(dataBytes));
-
         final int txPower = AdvertisingSetParameters.TX_POWER_HIGH;
         AdvertisingSetParameters parameters = new AdvertisingSetParameters.Builder()
                 .setConnectable(false)
@@ -252,10 +265,12 @@ public class MainActivity extends AppCompatActivity {
 
         //Log.e(MainActivity.class.getSimpleName(),"Sent Data: "+Arrays.toString(data.getServiceData().get(EDDYSTONE_SERVICE_UUID)));
         bleAdvertiser.startAdvertisingSet(parameters,data,null,null,null,advertiseCallback);
+        isAdvertising = true;
     }
 
     private void stopAdvertising(){
         bleAdvertiser.stopAdvertisingSet(advertiseCallback);
+        isAdvertising = false;
     }
 
     @Override
@@ -331,32 +346,6 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
-    private void startAdvertising1(){
-        AdvertiseCallback callback = new AdvertiseCallback() {
-            @Override
-            public void onStartSuccess(AdvertiseSettings settingsInEffect) {
-                super.onStartSuccess(settingsInEffect);
-                Log.e(MainActivity.class.getSimpleName(),"Advertising started!");
-            }
-        };
-
-        AdvertiseSettings settings = new AdvertiseSettings.Builder()
-                .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
-                .setConnectable(false)
-                .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_HIGH)
-                .setTimeout(0)
-                .build();
-
-        AdvertiseData data = new AdvertiseData.Builder()
-                .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                .addServiceData(EDDYSTONE_SERVICE_UUID,"Testing".getBytes())
-                .setIncludeDeviceName(true)
-                .setIncludeTxPowerLevel(true)
-                .build();
-        bleAdvertiser.startAdvertising(settings,data,callback);
-    }
-
-
     private static int seconds = 0;
     private static boolean isScanning = false;
     private static boolean isAdvertising = false;
@@ -364,31 +353,22 @@ public class MainActivity extends AppCompatActivity {
         runnable = new Runnable() {
             @Override
             public void run() {
-                if(seconds == 10000){
-                    if(isAdvertising){
-                        stopAdvertising();
-                        if(!isKeyReceived) {
-                            startScan();
-                            isScanning = true;
-                        }
-                        isAdvertising = false;
-                    }else if(isScanning && isKeyReceived){
-                        stopScan();
-                        startAdvertising();
-                        isScanning = false;
-                        isAdvertising = true;
-                    }
-                    seconds = 0;
-                }else if(!isScanning && !isAdvertising){
+
+                if(!isScanning && !isAdvertising){
                     startScan();
-                    isScanning = true;
+                }else if(seconds == 30){
+                    if(isScanning && !isKeyReceived){
+                        stopScan();
+                        isDataNeededFlag = true;
+                        buildToSendData();
+                        startAdvertising();
+                    }
                 }
-                seconds += 1000;
-                //Log.e(MainActivity.class.getSimpleName(),"Seconds: "+seconds);
-                timeHandler.postDelayed(this,1000);
+                seconds += 10;
+                timeHandler.postDelayed(this,10);
             }
         };
-        timeHandler.postDelayed(runnable,1000);
+        timeHandler.postDelayed(runnable,10);
     }
 
     private void stopTimer(){
@@ -396,51 +376,13 @@ public class MainActivity extends AppCompatActivity {
         timeHandler.removeCallbacks(runnable);
     }
 
-    private byte[] buildKey(boolean isKeyReceivedCheck){
-        if(isKeyReceivedCheck){
-            Map<Integer,byte[]> map = new TreeMap(publicKeyByteList);
-            String key = "";
-
-            for(Map.Entry<Integer,byte[]> entry: map.entrySet()){
-                byte[] entryArray = entry.getValue();
-                int length = entryArray.length;
-                int i;
-                for(i=4;i<length;i++){
-                    key += (char)entryArray[i];
-                }
-            }
-
-            Log.e(MainActivity.class.getSimpleName(),"Built Key: "+key);
-
-            return key.getBytes();
-
-        }else{
-            return convertMAC(DeviceAddress);
+    private void buildToSendData(){
+        if(!isKeyReceived && isDataNeededFlag){
+            byte[] header = buildPacketHeader(isKeyReceived,1,0);
+            byte[] data = convertMAC(DeviceAddress);
+            byte[] built = buildData(header,data);
+            Log.e(MainActivity.class.getSimpleName(),"Header: "+Arrays.toString(header) + " Data: "+Arrays.toString(data)+ " Built: "+Arrays.toString(built));
         }
     }
 
-    private List<byte[]> buildDataBytes(@NonNull byte[] data, boolean isKeyReceivedCheck){
-        //Log.e(MainActivity.class.getSimpleName(),"Data: "+Arrays.toString(data));
-        int length = data.length;
-        int fragments = length%11 == 0 ? length/11: length/11 + 1;
-        int index;
-        int i = 0;
-        List<byte[]> dataByteList = new ArrayList<>();
-        byte[] header;
-        byte[] dataFragment;
-        for(index=0;(index+11)<length;index+=11){
-            dataFragment = Arrays.copyOfRange(data,index,index+11);
-            header = buildPacketHeader(isKeyReceivedCheck,fragments,i++);
-            byte[] builtFragment = buildData(header,dataFragment);
-            //Log.e(MainActivity.class.getSimpleName(),"Data Fragment: "+ i +": "+Arrays.toString(builtFragment));
-            dataByteList.add(builtFragment);
-        }
-        if(length%11 != 0){
-            header = buildPacketHeader(isKeyReceivedCheck,fragments,i);
-            dataFragment = Arrays.copyOfRange(data,index,length);
-            dataByteList.add(buildData(header,dataFragment));
-        }
-
-        return dataByteList;
-    }
 }

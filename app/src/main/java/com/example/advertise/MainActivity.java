@@ -30,6 +30,12 @@ import android.util.Log;
 import android.widget.Toast;
 
 import java.io.ByteArrayOutputStream;
+import java.security.InvalidKeyException;
+import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.PublicKey;
+import java.security.spec.InvalidKeySpecException;
+import java.security.spec.X509EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -37,6 +43,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.TreeMap;
+
+import javax.crypto.BadPaddingException;
+import javax.crypto.Cipher;
+import javax.crypto.IllegalBlockSizeException;
+import javax.crypto.NoSuchPaddingException;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -344,11 +355,15 @@ public class MainActivity extends AppCompatActivity {
                 if(!isScanning && !isAdvertising){
                     startScan();
                 }else if(seconds == 30){
-                    if(isScanning && !isKeyReceived){
+                    if(isScanning && isKeyReceived){
                         stopScan();
-                        isDataNeededFlag = true;
                         buildToSendData();
                         startAdvertising();
+                        seconds = 0;
+                    }else if(isAdvertising){
+                        stopAdvertising();
+                        startAdvertising();
+                        seconds = 0;
                     }
                 }
                 seconds += 10;
@@ -363,6 +378,7 @@ public class MainActivity extends AppCompatActivity {
         timeHandler.removeCallbacks(runnable);
     }
 
+    private static final String passwd = "Passw()rd!";
     private void buildToSendData(){
 
         if(isKeyReceived && !isDataNeededFlag){
@@ -372,12 +388,80 @@ public class MainActivity extends AppCompatActivity {
             dataByteList.add(built);
         }else if(isKeyReceived && isDataNeededFlag){
             byte [] keyBytes = buildKey();
+            X509EncodedKeySpec keySpec = new X509EncodedKeySpec(keyBytes);
+            try {
+                KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+                PublicKey key = keyFactory.generatePublic(keySpec);
+                Cipher cipher = Cipher.getInstance("RSA");
+                cipher.init(Cipher.ENCRYPT_MODE,key);
+                byte [] encryptedData = cipher.doFinal(passwd.getBytes());
+                dataByteList = segmentData(encryptedData,11);
+            } catch (NoSuchAlgorithmException e) {
+                e.printStackTrace();
+            } catch (InvalidKeySpecException e) {
+                e.printStackTrace();
+            } catch (NoSuchPaddingException e) {
+                e.printStackTrace();
+            } catch (InvalidKeyException e) {
+                e.printStackTrace();
+            } catch (BadPaddingException e) {
+                e.printStackTrace();
+            } catch (IllegalBlockSizeException e) {
+                e.printStackTrace();
+            }
+
         }
 
     }
 
+    private List<byte[]> segmentData(@NonNull byte[] data, int segmentLength){
+
+        int dataSize = data.length;
+        int startIndex = 0;
+        List<byte[]> segmentList = new ArrayList<>();
+        if(dataSize <= segmentLength) {
+            byte[] header = buildPacketHeader(isKeyReceived,1,0);
+            byte[] built = buildData(header,data);
+           segmentList.add(built);
+        }
+        else{
+            byte[] segment;
+            byte[] header;
+            int totalSegments = (dataSize/segmentLength) + (dataSize%segmentLength) == 0 ? 0: 1;
+            int segIndex = 0;
+            while((dataSize-startIndex) >= segmentLength){
+                header = buildPacketHeader(isKeyReceived,totalSegments,segIndex++);
+                segment = new byte[segmentLength];
+                System.arraycopy(data,startIndex,segment,0,segmentLength);
+                startIndex+=segmentLength;
+                segmentList.add(buildData(header,segment));
+            }
+            if((dataSize-startIndex) > 0){
+                int finalLength = dataSize-startIndex;
+                header = buildPacketHeader(isKeyReceived,totalSegments,segIndex);
+                segment = new byte[finalLength];
+                System.arraycopy(data,startIndex,segment,0,finalLength);
+                segmentList.add(buildData(header,segment));
+            }
+        }
+
+        return segmentList;
+    }
+
     private byte[] buildKey(){
-        return null;
+
+        Map<Integer,byte[]> sortedKeyBytes = new TreeMap<>(publicKeyByteList);
+        String key = "";
+
+        for(Map.Entry<Integer,byte[]> entry:sortedKeyBytes.entrySet()){
+            byte[] packetBytes = entry.getValue();
+            int packetLength = packetBytes.length;
+            byte[] packetDataBytes = new byte[packetBytes.length-4];
+            System.arraycopy(packetBytes,4,packetDataBytes,0,packetLength-4);
+            key.concat(new String(packetDataBytes));
+        }
+
+        return key.getBytes();
     }
 
 }

@@ -102,20 +102,13 @@ public class MainActivity extends AppCompatActivity {
         public void onAdvertisingSetStarted(AdvertisingSet advertisingSet, int txPower, int status) {
             super.onAdvertisingSetStarted(advertisingSet, txPower, status);
             Log.e(MainActivity.class.getSimpleName(),"Advertising started!");
-            if(!isKeyReceived){
-                AdvertiseData data = (new AdvertiseData.Builder())
-                        .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(convertMAC(DeviceAddress),isKeyReceived).get(0))
-                        .build();
-                advertisingSet.setAdvertisingData(data);
-            }else{
-                if(sentDataByteIndex == dataByteList.size()) sentDataByteIndex = 0;
-                AdvertiseData data = (new AdvertiseData.Builder())
-                        .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(dataByteList.get(sentDataByteIndex++),isKeyReceived).get(0))
-                        .build();
-                advertisingSet.setAdvertisingData(data);
-            }
+            sentDataByteIndex = 0;
+            AdvertiseData data = new AdvertiseData.Builder()
+                    .addServiceUuid(EDDYSTONE_SERVICE_UUID)
+                    .addServiceData(EDDYSTONE_SERVICE_UUID,dataByteList.get(sentDataByteIndex++))
+                    .build();
+            advertisingSet.setAdvertisingData(data);
+            Log.e(MainActivity.class.getSimpleName(),"Sent: "+data.getServiceData());
         }
 
 
@@ -127,22 +120,16 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public void onAdvertisingDataSet(AdvertisingSet advertisingSet, int status) {
             super.onAdvertisingDataSet(advertisingSet, status);
-            AdvertiseData data;
-            if(!isKeyReceived){
-                data = (new AdvertiseData.Builder())
-                        .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(convertMAC(DeviceAddress),isKeyReceived).get(0))
-                        .build();
-                advertisingSet.setAdvertisingData(data);
-            }else{
-                if(sentDataByteIndex == dataByteList.size()) sentDataByteIndex = 0;
-                 data = (new AdvertiseData.Builder())
-                        .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                        //.addServiceData(EDDYSTONE_SERVICE_UUID,buildDataBytes(dataByteList.get(sentDataByteIndex++),isKeyReceived).get(0))
-                        .build();
-                advertisingSet.setAdvertisingData(data);
+            Log.e(MainActivity.class.getSimpleName(), "onAdvertisingDataSet()");
+            if(sentDataByteIndex == dataByteList.size()){
+                sentDataByteIndex = 0;
             }
-            Log.e(MainActivity.class.getSimpleName(),Arrays.toString(data.getServiceData().get(EDDYSTONE_SERVICE_UUID)));
+            AdvertiseData data = new AdvertiseData.Builder()
+                    .addServiceUuid(EDDYSTONE_SERVICE_UUID)
+                    .addServiceData(EDDYSTONE_SERVICE_UUID,dataByteList.get(sentDataByteIndex++))
+                    .build();
+            advertisingSet.setAdvertisingData(data);
+            Log.e(MainActivity.class.getSimpleName(),"Sent: "+data.getServiceData());
         }
 
         @Override
@@ -377,12 +364,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void buildToSendData(){
-        if(!isKeyReceived && isDataNeededFlag){
+
+        if(isKeyReceived && !isDataNeededFlag){
             byte[] header = buildPacketHeader(isKeyReceived,1,0);
             byte[] data = convertMAC(DeviceAddress);
             byte[] built = buildData(header,data);
-            Log.e(MainActivity.class.getSimpleName(),"Header: "+Arrays.toString(header) + " Data: "+Arrays.toString(data)+ " Built: "+Arrays.toString(built));
+            dataByteList.add(built);
+        }else if(isKeyReceived && isDataNeededFlag){
+
         }
+
     }
 
 }

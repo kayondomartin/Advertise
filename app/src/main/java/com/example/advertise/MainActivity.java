@@ -362,8 +362,14 @@ public class MainActivity extends AppCompatActivity {
                         seconds = 0;
                     }else if(isAdvertising){
                         stopAdvertising();
-                        startAdvertising();
+                        startScan();
                         seconds = 0;
+                    }else if(isDataReceivedFlag){
+                        if(isScanning) stopScan();
+                        else if(isAdvertising) stopAdvertising();
+                        stopTimer();
+                    }else {
+                        startScan();
                     }
                 }
                 seconds += 10;

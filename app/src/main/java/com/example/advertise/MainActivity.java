@@ -104,7 +104,7 @@ public class MainActivity extends AppCompatActivity {
 
         int max = bluetoothAdapter.getLeMaximumAdvertisingDataLength();
         byte[] addressByte = convertMAC(testAddress);
-        Log.e(MainActivity.class.getSimpleName(),addressByte.length+", max: "+max +", array: " +Arrays.toString(addressByte) + "array2: "+Arrays.toString(convertMAC(DeviceAddress)));
+       // Log.e(MainActivity.class.getSimpleName(),addressByte.length+", max: "+max +", array: " +Arrays.toString(addressByte) + "array2: "+Arrays.toString(convertMAC(DeviceAddress)));
 
     }
 
@@ -116,10 +116,10 @@ public class MainActivity extends AppCompatActivity {
             sentDataByteIndex = 0;
             AdvertiseData data = new AdvertiseData.Builder()
                     .addServiceUuid(EDDYSTONE_SERVICE_UUID)
+                    .setIncludeDeviceName(true)
                     .addServiceData(EDDYSTONE_SERVICE_UUID,dataByteList.get(sentDataByteIndex++))
                     .build();
             advertisingSet.setAdvertisingData(data);
-            Log.e(MainActivity.class.getSimpleName(),"Sent: "+data.getServiceData());
         }
 
 
@@ -135,12 +135,16 @@ public class MainActivity extends AppCompatActivity {
             if(sentDataByteIndex == dataByteList.size()){
                 sentDataByteIndex = 0;
             }
+            byte [] toSend = dataByteList.get(sentDataByteIndex++);
             AdvertiseData data = new AdvertiseData.Builder()
+                    .setIncludeDeviceName(true)
                     .addServiceUuid(EDDYSTONE_SERVICE_UUID)
-                    .addServiceData(EDDYSTONE_SERVICE_UUID,dataByteList.get(sentDataByteIndex++))
+                    .addServiceData(EDDYSTONE_SERVICE_UUID,toSend)
                     .build();
-            advertisingSet.setAdvertisingData(data);
-            Log.e(MainActivity.class.getSimpleName(),"Sent: "+data.getServiceData());
+            if(advertisingSet != null) {
+                advertisingSet.setAdvertisingData(data);
+            }
+            //Log.e(MainActivity.class.getSimpleName(),"Sent: "+Arrays.toString(toSend));
         }
 
         @Override
@@ -156,6 +160,7 @@ public class MainActivity extends AppCompatActivity {
     private static boolean isKeyReceived  = false;
     private static boolean isDataNeededFlag = false;
     private static boolean isDataReceivedFlag = false;
+    private static boolean isDataToSendBuilt = false;
     private ScanCallback scanCallback = new ScanCallback() {
         @Override
         public void onScanResult(int callbackType, ScanResult result) {
@@ -182,7 +187,6 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             }
-            Log.e(MainActivity.class.getSimpleName(),"Scan Address: "+result.getDevice().getAddress());
             Log.e(MainActivity.class.getSimpleName(),getHexData(dataByteArray));
         }
 
@@ -190,6 +194,7 @@ public class MainActivity extends AppCompatActivity {
     };
 
     private void startScan(){
+        Log.e(MainActivity.class.getSimpleName(),"Scan started!");
         bleScanner.startScan(SCAN_FILTERS,SCAN_SETTINGS,scanCallback);
         isScanning = true;
     }
@@ -197,6 +202,7 @@ public class MainActivity extends AppCompatActivity {
     private void stopScan(){
         bleScanner.stopScan(scanCallback);
         isScanning = false;
+        Log.e(MainActivity.class.getSimpleName(),"Sacn stopped");
     }
 
     private byte[] buildData(@NonNull byte[]...byteList){
@@ -258,6 +264,7 @@ public class MainActivity extends AppCompatActivity {
                 .build();
 
         AdvertiseData data = new AdvertiseData.Builder()
+                .setIncludeDeviceName(true)
                 .addServiceUuid(EDDYSTONE_SERVICE_UUID)
                 .build();
 
@@ -347,6 +354,7 @@ public class MainActivity extends AppCompatActivity {
     private static int seconds = 0;
     private static boolean isScanning = false;
     private static boolean isAdvertising = false;
+    private static boolean isWaitingData = false;
     private void startTimer(){
         runnable = new Runnable() {
             @Override
@@ -354,7 +362,7 @@ public class MainActivity extends AppCompatActivity {
 
                 if(!isScanning && !isAdvertising){
                     startScan();
-                }else if(seconds == 30){
+                }else if(seconds == 3000){
                     if(isScanning && isKeyReceived){
                         stopScan();
                         buildToSendData();
@@ -370,13 +378,14 @@ public class MainActivity extends AppCompatActivity {
                         stopTimer();
                     }else {
                         startScan();
+                        seconds = 0;
                     }
                 }
-                seconds += 10;
-                timeHandler.postDelayed(this,10);
+                seconds += 1000;
+                timeHandler.postDelayed(this,1000);
             }
         };
-        timeHandler.postDelayed(runnable,10);
+        timeHandler.postDelayed(runnable,1000);
     }
 
     private void stopTimer(){
@@ -388,10 +397,11 @@ public class MainActivity extends AppCompatActivity {
     private void buildToSendData(){
 
         if(isKeyReceived && !isDataNeededFlag){
-            byte[] header = buildPacketHeader(isKeyReceived,1,0);
+            //byte[] header = buildPacketHeader(isKeyReceived,1,0);
             byte[] data = convertMAC(DeviceAddress);
-            byte[] built = buildData(header,data);
-            dataByteList.add(built);
+            //byte[] built = buildData(header,data);
+            dataByteList = segmentData(data,11);
+            //Log.e(MainActivity.class.getSimpleName(),"Data Built: "+Arrays.toString(built));
         }else if(isKeyReceived && isDataNeededFlag){
             byte [] keyBytes = buildKey();
             X509EncodedKeySpec keySpec = new X509EncodedKeySpec(keyBytes);
